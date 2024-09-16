@@ -1,6 +1,8 @@
 # extractor.py
 
 import os
+import traceback
+import logging
 import re
 import pdfplumber
 import pytesseract
@@ -84,10 +86,17 @@ class PDFExtractor:
         return extracted_text
 
     def extract_data_from_pdf(self, pdf_path, fields_config):
-        is_scanned = self.is_scanned_pdf(pdf_path)
-        if is_scanned:
-            pages_text = self.extract_text_from_scanned_pdf(pdf_path)
-        else:
-            pages_text = self.extract_text_from_text_based_pdf(pdf_path)
-        extracted_data = self.process_fields(fields_config, pages_text, pdf_path, is_scanned)
-        return extracted_data
+        try:
+            is_scanned = self.is_scanned_pdf(pdf_path)
+            if is_scanned:
+                pages_text = self.extract_text_from_scanned_pdf(pdf_path)
+            else:
+                pages_text = self.extract_text_from_text_based_pdf(pdf_path)
+            extracted_data = self.process_fields(fields_config, pages_text, pdf_path, is_scanned)
+            return extracted_data
+        except Exception as e:
+            error_message = f"Error extracting data from PDF: {pdf_path}"
+            error_details = traceback.format_exc()
+            logging.error(error_message)
+            # Re-raise the exception with additional context
+            raise Exception(error_message) from e

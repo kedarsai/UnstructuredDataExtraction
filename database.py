@@ -1,6 +1,8 @@
 # database.py
 
 import pyodbc
+import logging
+import traceback
 
 class DatabaseManager:
     def __init__(self, server, database):
@@ -45,8 +47,84 @@ class DatabaseManager:
             self.cursor.execute(insert_sql, values)
             self.connection.commit()
         except pyodbc.IntegrityError as e:
-            print(f"Error inserting {data.get('file_name')}: {e}")
-            pass
+            error_message = f"Integrity error inserting {data.get('file_name')}: {e}"
+            error_details = traceback.format_exc()
+            logging.error(error_message)
+            self.log_error(error_message, error_details, function_name='insert_data', file_name=data.get('file_name'))
+            pass  # Handle duplicate primary key or other integrity errors
+        except Exception as e:
+            error_message = f"Error inserting data for {data.get('file_name')}: {e}"
+            error_details = traceback.format_exc()
+            logging.error(error_message)
+            self.log_error(error_message, error_details, function_name='insert_data', file_name=data.get('file_name'))
+            raise  # Re-raise exception to be handled at a higher level
+    
+    def ensure_error_log_table(self):
+        table_name = 'ErrorLog'
+        if not self.table_exists(table_name):
+            create_table_sql = """
+                CREATE TABLE ErrorLog (
+                    log_id INT IDENTITY(1,1) PRIMARY KEY,
+                    timestamp DATETIME DEFAULT GETDATE(),
+                    error_message NVARCHAR(MAX),
+                    error_details NVARCHAR(MAX),
+                    file_name NVARCHAR(255) NULL,
+                    function_name NVARCHAR(255)
+                );
+            """
+            self.cursor.execute(create_table_sql)
+            self.connection.commit()
+            logging.info(f"Table '{table_name}' created.")
+
+    def ensure_activity_log_table(self):
+        table_name = 'ActivityLog'
+        if not self.table_exists(table_name):
+            create_table_sql = """
+                CREATE TABLE ActivityLog (
+                    log_id INT IDENTITY(1,1) PRIMARY KEY,
+                    timestamp DATETIME DEFAULT GETDATE(),
+                    file_name NVARCHAR(255),
+                    status NVARCHAR(50),
+                    message NVARCHAR(MAX),
+                    details NVARCHAR(MAX) NULL,
+                    function_name NVARCHAR(255)
+                );
+            """
+            self.cursor.execute(create_table_sql)
+            self.connection.commit()
+            logging.info(f"Table '{table_name}' created.")
+
+    def log_error(self, error_message, error_details, function_name, file_name=None):
+            # Log to logger
+            logging.error(f"{error_message} in {function_name} for file {file_name}")
+            logging.error(f"Details: {error_details}")
+            # Log to database
+            insert_sql = """
+                INSERT INTO ErrorLog (error_message, error_details, function_name, file_name)
+                VALUES (?, ?, ?, ?)
+            """
+            values = (error_message, error_details, function_name, file_name)
+            try:
+                self.cursor.execute(insert_sql, values)
+                self.connection.commit()
+            except Exception as e:
+                # If logging to the database fails, log to logger
+                logging.error(f"Failed to log error to database: {e}")
+                logging.error(f"Original Error: {error_message}, Details: {error_details}")
+
+    def log_activity(self, file_name, status, message, function_name, details=None):
+        insert_sql = """
+            INSERT INTO ActivityLog (file_name, status, message, function_name, details)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        values = (file_name, status, message, function_name, details)
+        try:
+            self.cursor.execute(insert_sql, values)
+            self.connection.commit()
+        except Exception as e:
+            # If logging to the database fails, log to console
+            logging.error(f"Failed to log activity to database: {e}")
+            logging.error(f"Activity: File={file_name}, Status={status}, Message={message}")
 
     def close(self):
         self.cursor.close()

@@ -11,4 +11,4 @@ SERVER = os.getenv('SQL_SERVER', 'AECSP-KPADIGALA\KEDAR')
 DATABASE = os.getenv('SQL_DATABASE', 'practice')  # Update as needed
 
 # Table name
-TABLE_NAME = 'contractsxyz'  # Update as needed
+TABLE_NAME = 'contracts5'  # Update as needed
